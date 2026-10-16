@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://cfej7g505n4da" path="res://scenes/guard.tscn" id="6_o6xl0"]
 [ext_resource type="PackedScene" uid="uid://cupcs0cyv5xk7" path="res://scenes/npc.tscn" id="7_tipki"]
 [ext_resource type="PackedScene" uid="uid://uu2ogim4hy2v" path="res://scenes/dialogue_ui.tscn" id="9_85g3d"]
+[ext_resource type="PackedScene" uid="uid://8b3u2cbckgnj" path="res://scenes/portal.tscn" id="10_choun"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tbgi4"]
 texture = ExtResource("1_sugp2")
@@ -1187,6 +1188,9 @@ offset_bottom = 54.0
 text = "Cristales: 0/3"
 
 [node name="DialogueUI" parent="." unique_id=591081461 instance=ExtResource("9_85g3d")]
+
+[node name="Portal" parent="." unique_id=158897878 instance=ExtResource("10_choun")]
+position = Vector2(1089, 105)
 
 [connection signal="collected" from="crystals/crystal" to="." method="_on_crystal_collected"]
 [connection signal="collected" from="crystals/crystal2" to="." method="_on_crystal_collected"]

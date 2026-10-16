@@ -35,6 +35,7 @@ func interact() -> void:
 					"Recuperalos rapido y traemelos antes de que se pierdan."
 				]
 			)
+
 			QuestManager.start_quest()
 
 		QuestManager.QuestState.ACTIVE:
@@ -55,26 +56,21 @@ func interact() -> void:
 				[
 					"Perfecto, muchas gracias por ayudarme.",
 					"Recuperaste todos los cristales a tiempo.",
-					"Ahora activaremos el portal a tiempo."
+					"Ahora activaremos el portal."
 				]
 			)
+
 			QuestManager.complete_quest()
 
 		QuestManager.QuestState.COMPLETED:
-			dialogue_ui.show_dialogue(
-				"Han Solo",
-				[
-					"Muchas gracias por tu ayuda.",
-					"Ahora el portal esta listo para ser utilizado."
-				]
-			)
+			return
 
 
 func _on_interactive_area_body_entered(body: Node2D) -> void:
-	if body.name == "player":
+	if body.is_in_group("player"):
 		player_nearby = true
 
 
 func _on_interactive_area_body_exited(body: Node2D) -> void:
-	if body.name == "player":
+	if body.is_in_group("player"):
 		player_nearby = false

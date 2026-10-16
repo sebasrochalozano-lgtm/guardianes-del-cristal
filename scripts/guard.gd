@@ -20,7 +20,7 @@ enum State {
 @export var idle_duration: float = 1.0
 @export var repath_distance: float = 8.0
 
-#VARIABLES EXPORTADAS DEL NIVEL DE VIDA DEL GUARDIA
+# VIDA DEL GUARDIA
 @export var max_health: int = 100
 @export_range(0.1, 0.9, 0.05) var flee_threeshold: float = 0.3
 @export var flee_speed: float = 145.0
@@ -37,9 +37,13 @@ enum State {
 
 @onready var healthbar: ProgressBar = $HealthBar
 
-#VARIABLES LOCALES
+
 var health: int
 var is_dead: bool = false
+
+# NUEVO:
+# Se vuelve true cuando termina la misión.
+var level_finished: bool = false
 
 var state: State = State.IDLE
 var player: CharacterBody2D = null
@@ -56,6 +60,7 @@ var navigation_ready: bool = false
 
 var is_retreating: bool = false
 
+
 func _ready() -> void:
 	home_position = global_position
 
@@ -63,31 +68,29 @@ func _ready() -> void:
 	healthbar.max_value = max_health
 	healthbar.value = health
 
-	# Guardamos las posiciones globales de patrullaje.
-	# Así no se mueven junto con el guardia.
 	patrol_positions = [
 		patrol_a.global_position,
 		patrol_b.global_position
 	]
 
-	# Configuración de navegación.
 	navigation_agent.path_desired_distance = 8.0
 	navigation_agent.target_desired_distance = 10.0
 	navigation_agent.avoidance_enabled = false
 
-	detection_area.body_entered.connect(
-		_on_detection_body_entered
-	)
+	# Evita conectar dos veces las señales.
+	if not detection_area.body_entered.is_connected(_on_detection_body_entered):
+		detection_area.body_entered.connect(_on_detection_body_entered)
 
-	detection_area.body_exited.connect(
-		_on_detection_body_exited
-	)
+	if not detection_area.body_exited.is_connected(_on_detection_body_exited):
+		detection_area.body_exited.connect(_on_detection_body_exited)
 
-	# Estado inicial.
+	# Cuando termina la misión, detener este guardia.
+	if not QuestManager.quest_completed.is_connected(_on_quest_completed):
+		QuestManager.quest_completed.connect(_on_quest_completed)
+
 	state = State.IDLE
 	idle_timer = idle_duration
 
-	# Esperar a que el mapa de navegación se sincronice.
 	call_deferred("_initialize_navigation")
 
 
@@ -98,7 +101,6 @@ func _initialize_navigation() -> void:
 		return
 
 	navigation_ready = true
-
 	navigation_agent.target_position = home_position
 
 
@@ -106,14 +108,23 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		velocity = Vector2.ZERO
 		return
-	
+
+	# Si terminó el nivel, el guardia ya no hace absolutamente nada.
+	if level_finished:
+		velocity = Vector2.ZERO
+		return
+
 	if not navigation_ready:
 		velocity = Vector2.ZERO
 		return
 
 	attack_timer = maxf(attack_timer - delta, 0.0)
 
-	if state == State.CHASE or state == State.ATTACK or state == State.FLEE:
+	if (
+		state == State.CHASE
+		or state == State.ATTACK
+		or state == State.FLEE
+	):
 		evaluate_decision()
 
 	match state:
@@ -131,6 +142,7 @@ func _physics_process(delta: float) -> void:
 
 		State.RETURN:
 			process_return()
+
 		State.FLEE:
 			process_flee()
 
@@ -186,6 +198,9 @@ func process_chase() -> void:
 func process_attack() -> void:
 	velocity = Vector2.ZERO
 
+	if level_finished:
+		return
+
 	if not is_instance_valid(player):
 		player = null
 		change_state(State.RETURN)
@@ -195,7 +210,6 @@ func process_attack() -> void:
 		change_state(State.CHASE)
 		return
 
-	# Orientarse hacia el jugador.
 	var direction: Vector2 = (
 		player.global_position - global_position
 	)
@@ -205,7 +219,9 @@ func process_attack() -> void:
 	if attack_timer <= 0.0:
 		if player.has_method("take_damage"):
 			player.take_damage(attack_damage)
-			sprite.play("attack")
+
+			if sprite.sprite_frames.has_animation("attack"):
+				sprite.play("attack")
 
 		attack_timer = attack_cooldown
 
@@ -223,45 +239,51 @@ func process_return() -> void:
 		change_state(State.IDLE)
 		is_retreating = false
 
+
 func take_damage(amount: int) -> void:
 	if is_dead:
 		return
+
+	# Cuando termina el nivel dejamos a los sobrevivientes vivos.
+	if level_finished:
+		return
+
 	health = maxi(health - amount, 0)
 	healthbar.value = health
+
 	if health <= 0:
 		die()
-		return
-	#evaluate_decision()
-	
+
+
 func die() -> void:
 	is_dead = true
 	velocity = Vector2.ZERO
 	queue_free()
 
+
 func navigate_to(
 	target: Vector2,
 	movement_speed: float
 ) -> void:
+	if level_finished:
+		velocity = Vector2.ZERO
+		return
 
 	if not navigation_ready:
 		velocity = Vector2.ZERO
 		return
 
-	# Solo actualizar destino si ha cambiado.
 	if navigation_agent.target_position.distance_to(target) > repath_distance:
 		navigation_agent.target_position = target
 
-	# Comprobar si terminó el recorrido.
 	if navigation_agent.is_navigation_finished():
 		velocity = Vector2.ZERO
 		return
 
-	# Obtener el siguiente punto de la ruta.
 	var next_position: Vector2 = (
 		navigation_agent.get_next_path_position()
 	)
 
-	# Calcular dirección hacia ese punto.
 	var direction: Vector2 = (
 		global_position.direction_to(next_position)
 	)
@@ -270,20 +292,30 @@ func navigate_to(
 
 
 func _on_detection_body_entered(body: Node2D) -> void:
+	if level_finished:
+		return
+
 	if body.is_in_group("player"):
 		if body is CharacterBody2D:
 			player = body as CharacterBody2D
+
 			if not is_retreating:
 				change_state(State.CHASE)
 
 
 func _on_detection_body_exited(body: Node2D) -> void:
+	if level_finished:
+		return
+
 	if body == player:
 		player = null
 		change_state(State.RETURN)
 
 
 func is_player_in_attack_range() -> bool:
+	if level_finished:
+		return false
+
 	if not is_instance_valid(player):
 		return false
 
@@ -291,6 +323,9 @@ func is_player_in_attack_range() -> bool:
 
 
 func change_state(new_state: State) -> void:
+	if level_finished:
+		return
+
 	if state == new_state:
 		return
 
@@ -313,6 +348,10 @@ func change_state(new_state: State) -> void:
 		State.RETURN:
 			pass
 
+		State.FLEE:
+			pass
+
+
 func is_player_alive() -> bool:
 	if not is_instance_valid(player):
 		return false
@@ -321,6 +360,7 @@ func is_player_alive() -> bool:
 		return false
 
 	return true
+
 
 func process_flee() -> void:
 	if not is_instance_valid(player):
@@ -360,15 +400,25 @@ func process_flee() -> void:
 
 	navigate_to(safe_target, flee_speed)
 
+
 func evaluate_decision() -> void:
+	if level_finished:
+		return
+
 	if is_retreating and state == State.RETURN:
 		return
+
 	if is_dead:
 		return
 
 	if not is_instance_valid(player):
-		if state == State.CHASE or state == State.ATTACK or state == State.FLEE:
+		if (
+			state == State.CHASE
+			or state == State.ATTACK
+			or state == State.FLEE
+		):
 			change_state(State.RETURN)
+
 		return
 
 	var health_percentage: float = (
@@ -385,7 +435,11 @@ func evaluate_decision() -> void:
 	else:
 		change_state(State.CHASE)
 
+
 func update_animation() -> void:
+	if level_finished:
+		return
+
 	if velocity.length() > 5.0:
 		update_facing_direction(velocity)
 
@@ -420,3 +474,27 @@ func update_facing_direction(direction: Vector2) -> void:
 			facing_direction = "down"
 		else:
 			facing_direction = "up"
+
+
+# Se ejecuta automáticamente cuando QuestManager
+# emite quest_completed.
+func _on_quest_completed() -> void:
+	level_finished = true
+
+	player = null
+	velocity = Vector2.ZERO
+	is_retreating = false
+
+	# Ya no detecta ni ataca al jugador.
+	detection_area.monitoring = false
+	attack_area.monitoring = false
+
+	# Dejar al guardia parado mirando en su dirección actual.
+	var idle_animation := "idle_" + facing_direction
+
+	if sprite.sprite_frames.has_animation(idle_animation):
+		sprite.play(idle_animation)
+	else:
+		sprite.stop()
+
+	print("Guardia detenido: misión completada")

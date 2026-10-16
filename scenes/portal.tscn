@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://8b3u2cbckgnj"]
+
+[ext_resource type="Script" uid="uid://di7l1cnnopodw" path="res://scripts/portal.gd" id="1_1ffj6"]
+[ext_resource type="Texture2D" uid="uid://dyj2ttynf1n48" path="res://assets/items/37_puerta_salida.png" id="1_v0xau"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ojbw0"]
+size = Vector2(58.100975, 67.98234)
+
+[node name="Portal" type="Area2D" unique_id=158897878]
+script = ExtResource("1_1ffj6")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=254250549]
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("1_v0xau")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=676516710]
+position = Vector2(0, -1.1920929e-07)
+rotation = 0.00245107
+shape = SubResource("RectangleShape2D_ojbw0")
